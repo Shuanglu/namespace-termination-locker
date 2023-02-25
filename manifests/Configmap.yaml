@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: namespace-termination-locker-webhook
+data:
+  whitelist.json: |
+    {
+      "group": "",
+      "version": "v1",
+      "resource": "configmap",
+      "name": "kube-root-ca.crt"
+    }

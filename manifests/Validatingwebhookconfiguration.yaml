@@ -1,0 +1,22 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: namespace-termination-locker-webhook
+webhooks:
+  - name: namespace-termination-locker-webhook.example.com
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["DELETE"]
+        resources: ["namespaces"]
+        scope: "*"
+    clientConfig:
+      service:
+        namespace: default
+        name: namespace-termination-locker-webhook
+        path: /validate
+        port: 443
+      caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUN5akNDQWJJQ0NRRHZNK0JBdTA3V1JUQU5CZ2txaGtpRzl3MEJBUXNGQURBbk1TVXdJd1lEVlFRRERCeHUKWVcxbGMzQmhZMlV0ZEdWeWJXbHVZWFJwYjI0dGJHOWphMlZ5TUI0WERUSXpNREl5TlRBM05EWTBNVm9YRFRJMApNREl5TlRBM05EWTBNVm93SnpFbE1DTUdBMVVFQXd3Y2JtRnRaWE53WVdObExYUmxjbTFwYm1GMGFXOXVMV3h2ClkydGxjakNDQVNJd0RRWUpLb1pJaHZjTkFRRUJCUUFEZ2dFUEFEQ0NBUW9DZ2dFQkFPS1RiQTkyMTd0UVdXbXQKRC8vMyszS2lKNmlWdmxSNnFRNXNpSmFFUG1TS0dDZjNZSHZMQ0RySnc4amQ3UlpkQmx2T21UYjZwZUNYN1BnawphcTZLNFpCd3lyc3lBZDRNUXpVZFM1UG95QW9WbkFQek5NTVNkKzNFdDVhOE5xUnFMUWVBREUrcnpLc0JTMVZGCjVzaUNKM3A4SUN2NXZVellIRHlLWjlVMGZQSmRaaVJwYUpRQkpaNkwwS2FwZGcrbXc5VzBObFNqbUdzekxTZEMKL2hCeVFrcUNIVnBHKzF1VWcxU0xERHQvbVJQTURPWEVrMW9EYW5oamdnZnV1R0Fyemtlby9hNDVnK3kvTjRmKwpaaEZCUzFETmFXL1c0eGVOUUl3aFp3SnhHNzhXR0gzSDZUM3Yvam4vVFVxb05pYW13cjM4aTdYb1o3Y3RobzZiCmJKNHZrNVVDQXdFQUFUQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFuU1prdFNmeGZ4VlZCTnlNQXp6NWtLMlAKSDlnQlZoaDFSN2wwVHp5RTZGQmdoMjF6Wk5yMkZXQ2RPTVdCU2pPMXgrSGFzam1KYVpoN0pqa1diU01VL1Q4RQppSi8wM2tXRVdqcUgrK1RRWlBQNFVzRk9xcVdkK3VOTHU0QU5ZNEdmR2pERG1HZ1cwYzRianRhUzBZUEtpQ2k5CnR5WHNrZzByS2l4dFEvcTJYVUFJclh1TXBwV0RpWmhQb0VsekFSbmk1Qi9nSi9GdTBNWnExRzI0ZGZGQVpKL0MKQWFjZjJ5Y00veUVwS08zRVo4WEFmRWd5a05sSXd2NGVHakhwUXlUai9wRjMxTEtkYjVUcW1SMW9qKzYxWjBPZgp4U2M3SGlsRFV3amYvZGlRTGpwRHZsUzVjSCtkYlIwT0pEcjhONUY2THViWUhaT1ZmcUpJaWdrdUErTFA1dz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 10

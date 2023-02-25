@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: namespace-termination-locker-webhook
+spec:
+  type: ClusterIP
+  selector:
+    app: namespace-termination-locker-webhook
+  ports:
+    - name: https
+      port: 443
+      targetPort: 443

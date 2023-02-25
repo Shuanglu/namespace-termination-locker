@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: namespace-termination-locker-webhook
+spec:
+  selector:
+    matchLabels:
+      app: namespace-termination-locker-webhook
+  replicas: 1 
+  template:
+    metadata:
+      labels:
+        app: namespace-termination-locker-webhook
+    spec:
+      volumes:
+        - name: tls
+          secret:
+            secretName: namespace-termination-locker-tls
+        - name: whitelist
+          configMap: 
+            name: namespace-termination-locker-webhook
+      containers:
+      - name: namespace-termination-locker-webhook
+        image: shawnlu/namespace-termination-locker:0124
+        args:
+        - -v=4
+        ports:
+        - containerPort: 443
+        volumeMounts:
+          - name: tls
+            mountPath: "/etc/admission-webhook/tls"
+            readOnly: true
+          - name: whitelist
+            mountPath: "/etc/admission-webhook/whitelist"
+            readOnly: true
