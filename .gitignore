@@ -24,3 +24,4 @@ go.work
 output/
 
 kubectl
+.vscode

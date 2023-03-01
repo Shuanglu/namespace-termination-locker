@@ -28,7 +28,10 @@ kubectl create secret tls namespace-termination-locker-tls \
   > manifests/Secret.yaml
 
 echo
-echo ">> Please update caBundle of the validatingwebhookconfiguration manually:"
-cat ca.crt | base64 
+#echo ">> Please update caBundle of the validatingwebhookconfiguration manually:"
+echo ">> Generating caBundle..."
+caBundle=`cat ca.crt | base64`
+yq -i ".webhooks.[].clientConfig += {\"caBundle\":\"$caBundle\"}" manifests/Validatingwebhookconfiguration.yaml
+
 
 rm ca.crt ca.key ca.srl server.crt server.csr server.key

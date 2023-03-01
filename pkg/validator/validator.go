@@ -88,6 +88,7 @@ func Validate(namespace string, kubernetesClient types.KubernetesClient) (bool, 
 					Message: fmt.Sprintf("There is resource existing under the namespace %q but failed to parse the metadta of it: %v", namespace, err),
 				}
 			}
+			klog.V(3).Infof("Checking resource: apiversion %q kind %q namespace %q name %q", strings.ToLower(apiversion), strings.ToLower(kind), strings.ToLower(namespace), strings.ToLower(name))
 			if exist := whitelistMemory[strings.ToLower(namespace)+"/"+strings.ToLower(apiversion)+"/"+strings.ToLower(kind)+"/"+strings.ToLower(name)]; exist {
 				klog.Infof("The resource exists in the whitelist")
 				continue
