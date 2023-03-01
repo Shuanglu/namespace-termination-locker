@@ -7,150 +7,101 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Shuanglu/namespace-termination-locker/pkg/types"
 	k8sError "k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	meta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	klog "k8s.io/klog/v2"
 )
 
-type WhiteList struct {
-	Group    string `json:"group,omitempty"`
-	Version  string `json:"version,omitempty"`
-	Resource string `json:"resource,omitempty"`
-	Name     string `json:"name,omitempty"`
-}
-
-type WhiteLists struct {
-	WhiteLists []WhiteList `json:"whitelists"`
-}
-
 var (
-	whielistPath = "/etc/admission-webhook/whitelist/whitelist.json"
+	whielistPath     = "/etc/admission-webhook/whitelist/whitelist.json"
+	builtinWhitelist = map[string]bool{"event": true}
 )
 
-func Validate(namespace string) (bool, *meta.Status) {
-	klog.Infof("Starting validation")
-	config, err := rest.InClusterConfig()
+func WhiteListInit(namespace string) map[string]bool {
+	whitelistsBytes, err := os.ReadFile(whielistPath)
 	if err != nil {
-		klog.Errorf("Failed to create config: %v")
-		return false, &meta.Status{
-			Message: fmt.Sprintf("Failed to create config: %v. Please check webhook server.", err),
-		}
+		klog.Errorf("Failed to read the data in %q", whielistPath)
 	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		klog.Errorf("Failed to create clientset: %v")
-		return false, &meta.Status{
-			Message: fmt.Sprintf("Failed to create clientset: %v. Please check webhook server.", err),
-		}
-	}
-	klog.V(4).Infof("Clientset has been initialized")
-	_, err = clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, meta.GetOptions{})
-	if err != nil {
-		if k8sError.IsNotFound(err) {
-			return false, &meta.Status{
-				Message: "The request is to delete a non-existing namespace.",
-			}
-		}
-	}
-
-	// List namespaced apiresources
-	klog.V(4).Infof("Starting to list apiresources")
-	_, apiresourceLists, err := clientset.DiscoveryClient.ServerGroupsAndResources()
-	for _, apiresourceList := range apiresourceLists {
-		klog.V(4).Infof("apiresource APIVersion: %v; Kind: %v; Group: %v; API: %v", apiresourceList.APIVersion, apiresourceList.Kind, apiresourceList.GroupVersion, apiresourceList.APIResources)
-	}
-	//clientset.DiscoveryClient.ServerResourcesForGroupVersion(schema.GroupVersion{})
-	if err != nil {
-		return false, &meta.Status{
-			Message: fmt.Sprintf("Failed to list namespaced apiresources: %v. Please check webhook server", err),
-		}
-	}
-	dclient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		klog.Errorf("Failed to build dynamic client: %v", err)
-	}
-
-	whitelistsBytes, _ := os.ReadFile(whielistPath)
-	var whitelists WhiteLists
+	var whitelists types.WhiteLists
 	err = json.Unmarshal(whitelistsBytes, &whitelists)
 	if err != nil {
 		klog.Warningf("Failed to parse the whitelist json: %v", err)
 	}
-	whitelistMemory := make(map[string]WhiteList)
+	whitelistMemory := make(map[string]bool)
 	for _, whitelist := range whitelists.WhiteLists {
-		whitelistMemory[whitelist.Resource] = whitelist
-		klog.V(3).Infof("Adding %v/%v/%v/%v to the whitelist", whitelist.Group, whitelist.Version, whitelist.Resource, whitelist.Name)
-	}
-	for _, apiresourceList := range apiresourceLists {
-		if len(apiresourceList.APIResources) == 0 {
-			continue
+		if whitelist.Namespace == "" {
+			whitelist.Namespace = namespace
 		}
-		var resource dynamic.ResourceInterface
-		var group string
-		var version string
-		if len(strings.Split(apiresourceList.GroupVersion, "/")) == 2 {
-			group = strings.Split(apiresourceList.GroupVersion, "/")[0]
-			version = strings.Split(apiresourceList.GroupVersion, "/")[1]
+		if whitelist.Group == "" {
+			whitelistMemory[strings.ToLower(whitelist.Namespace)+"/"+strings.ToLower(whitelist.Version)+"/"+strings.ToLower(whitelist.Kind)+"/"+strings.ToLower(whitelist.Name)] = true
 		} else {
-			version = strings.Split(apiresourceList.GroupVersion, "/")[0]
-			group = ""
+			whitelistMemory[strings.ToLower(whitelist.Namespace)+"/"+strings.ToLower(whitelist.Group)+"/"+strings.ToLower(whitelist.Version)+"/"+strings.ToLower(whitelist.Kind)+"/"+strings.ToLower(whitelist.Name)] = true
 		}
+		klog.V(3).Infof("Adding %v/%v/%v/%v to the whitelist", whitelist.Group, whitelist.Version, whitelist.Kind, whitelist.Name)
+	}
+	klog.Infof("Loaded the whitelist data")
+	return whitelistMemory
+}
 
-		for _, apiresource := range apiresourceList.APIResources {
-			klog.V(4).Infof("Checking Group: %v; version: %v; resource: %v, namespace: %v", group, version, apiresource.Kind, namespace)
-
-			groupVersionResource := schema.GroupVersionResource{
-				Group:    group,
-				Version:  version,
-				Resource: apiresource.Name,
+func Validate(namespace string, kubernetesClient types.KubernetesClient) (bool, *metav1.Status) {
+	klog.Infof("Starting validation")
+	whitelistMemory := WhiteListInit(namespace)
+	_, err := kubernetesClient.Clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
+	if err != nil {
+		if k8sError.IsNotFound(err) {
+			return false, &metav1.Status{
+				Message: "The request is to delete a non-existing namespace",
 			}
-			for _, verb := range apiresource.Verbs {
-				if strings.ToLower(verb) == "list" && apiresource.Namespaced {
-					resource = dclient.Resource(groupVersionResource).Namespace(namespace)
-					resourceList, err := resource.List(context.TODO(), meta.ListOptions{})
-					if err != nil {
-						klog.Errorf("Failed to list \"%v/%v\" resource %q: %v", group, version, apiresource.Kind, err)
-					}
-					if len(resourceList.Items) >= 1 {
-						block := true
-						if _, ok := whitelistMemory[apiresource.Name]; ok {
-							if whitelistMemory[apiresource.Name].Name == "" {
-								block = false
-							} else {
-								for _, item := range resourceList.Items {
-									klog.V(4).Infof("Checking resource %v/%v/%v/%v", group, version, apiresource.Kind, item.GetName())
-									if item.GetName() == whitelistMemory[apiresource.Name].Name {
-										itemGroupVersionKind := item.GroupVersionKind()
-										if itemGroupVersionKind.Group == apiresource.Group && itemGroupVersionKind.Version == apiresource.Version {
-											block = false
-										} else {
-											block = true
-										}
-									} else {
-										block = true
-									}
-								}
-							}
-						} else {
-							block = true
-						}
-
-						if !block {
-							continue
-						}
-						klog.Infof("Deny the request becasue \"%v/%v\" resource %q still exist under the namespace %v", group, version, apiresource.Kind, namespace)
-						return false, &meta.Status{
-							Message: fmt.Sprintf("Deny the request becasue \"%v/%v\" resource %q still exist under the namespace %v", group, version, apiresource.Kind, namespace),
-						}
-					}
+		}
+	}
+	for _, genericInformer := range kubernetesClient.GenericInformers {
+		genericNamespaceLister := genericInformer.Lister().ByNamespace(namespace)
+		resources, err := genericNamespaceLister.List(labels.Everything())
+		if err != nil {
+			return false, &metav1.Status{
+				Message: "Failed to get resources under the namespace",
+			}
+		}
+		accessor := meta.NewAccessor()
+		for _, resource := range resources {
+			deny := false
+			name, err := accessor.Name(resource)
+			if err != nil {
+				klog.Errorf("Failed to get the 'name' from the resource: %v", err)
+				deny = true
+			}
+			kind, err := accessor.Kind(resource)
+			if err != nil {
+				klog.Errorf("Failed to get the 'kind' from the resource: %v", err)
+				deny = true
+			}
+			apiversion, err := accessor.APIVersion(resource)
+			if err != nil {
+				klog.Errorf("Failed to get the 'apiversion' from the resource: %v", err)
+				deny = true
+			}
+			if deny {
+				return false, &metav1.Status{
+					Message: fmt.Sprintf("There is resource existing under the namespace %q but failed to parse the metadta of it: %v", namespace, err),
+				}
+			}
+			if exist := whitelistMemory[strings.ToLower(namespace)+"/"+strings.ToLower(apiversion)+"/"+strings.ToLower(kind)+"/"+strings.ToLower(name)]; exist {
+				klog.Infof("The resource exists in the whitelist")
+				continue
+			} else if builtinWhitelist[strings.ToLower(kind)] {
+				klog.Infof("The resource exists in the builtinWhitelist")
+				continue
+			} else {
+				return false, &metav1.Status{
+					Message: fmt.Sprintf("The resource %q under the namespace %q still exists and doesn't exist in the whitelist. Please clean up before deleting the namespace.", apiversion+"/"+kind+"/"+name, namespace),
 				}
 			}
 		}
 	}
-	klog.Infof("No resources exist in the namespace %v. Delete operation will be allowed", namespace)
+
 	return true, nil
+
 }

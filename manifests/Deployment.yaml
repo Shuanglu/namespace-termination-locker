@@ -21,7 +21,7 @@ spec:
             name: namespace-termination-locker-webhook
       containers:
       - name: namespace-termination-locker-webhook
-        image: shawnlu/namespace-termination-locker:0124
+        image: shawnlu/namespace-termination-locker:202303020138
         args:
         - -v=4
         ports:

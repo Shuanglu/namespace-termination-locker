@@ -4,9 +4,19 @@ metadata:
   name: namespace-termination-locker-webhook
 data:
   whitelist.json: |
-    {
-      "group": "",
-      "version": "v1",
-      "resource": "configmap",
-      "name": "kube-root-ca.crt"
+    { 
+      "whitelists": [
+        {
+          "group": "",
+          "version": "v1",
+          "resource": "configmap",
+          "name": "kube-root-ca.crt"
+        },
+        {
+          "group": "",
+          "version": "v1",
+          "resource": "serviceaccount",
+          "name": "default"
+        }
+      ]
     }
